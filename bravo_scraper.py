@@ -7,9 +7,13 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import NoSuchElementException
 from selenium.common.exceptions import TimeoutException
+import gspread
+from oauth2client.service_account import ServiceAccountCredentials
+from datetime import datetime
 import time
 from tabulate import tabulate
-from collections import defaultdict
+# from collections import defaultdict
+
 # Load .env file
 load_dotenv("creds/.env")
 
@@ -126,22 +130,25 @@ def extract_seances(driver, show_url, show_name):
                 continue
 
             city = row.find_element(By.CSS_SELECTOR, 'td[data-title="עיר"]').text.strip()
-            org = row.find_element(By.CSS_SELECTOR, 'td[data-title="מפיק"]').text.strip()
+            org = "בראבו" 
+            producer = row.find_element(By.CSS_SELECTOR, 'td[data-title="מפיק"]').text.strip() 
             hall = row.find_element(By.CSS_SELECTOR, 'td[data-title="אולם"]').text.strip()
-            date = row.find_element(By.CSS_SELECTOR, 'td[data-title="תאריך"]').text.strip()
+            raw_date = row.find_element(By.CSS_SELECTOR, 'td[data-title="תאריך"]').text.strip()
+            date = raw_date.replace(".", "/")
             time_ = row.find_element(By.CSS_SELECTOR, 'td[data-title="שעה"]').text.strip()
             sold = row.find_element(By.CSS_SELECTOR, 'td[data-title="נמכר"]').text.strip()
             available = row.find_element(By.CSS_SELECTOR, 'td[data-title="נשאר למכירה"]').text.strip()
 
             seances.append({
-                "שם ההופעה": show_name,
+                "הפקה": show_name,
                 "עיר": city,
-                "מפיק": org,
+                "ארגון": org,        # this is now the correct "בראבו"
+                "מפיק": producer,     # optional for later
                 "אולם": hall,
                 "תאריך": date,
                 "שעה": time_,
-                "נמכר": sold,
-                "נשאר למכירה": available,
+                "נמכרו": sold,
+                "נשאר למכירה": available,  # optional, not used in update for now
             })
 
         except NoSuchElementException:
@@ -160,7 +167,7 @@ def extract_seances(driver, show_url, show_name):
     duplicates = []
 
     for s in seances:
-        key = (s["שם ההופעה"], s["תאריך"])
+        key = (s["הפקה"], s["תאריך"])
         if key in seen:
             duplicates.append(key)
         else:
@@ -195,7 +202,70 @@ def run_for_user(username, password):
 
     return all_data
 
+# Get the Google Sheets worksheet
+def get_worksheet(sheet_name: str, tab_name: str):
+    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+    creds = ServiceAccountCredentials.from_json_keyfile_name("creds/service_account.json", scope)
+    client = gspread.authorize(creds)
+    sheet = client.open(sheet_name)
+    return sheet.worksheet(tab_name)
 
+from datetime import datetime
+
+def update_sheet_with_bravo_data(sheet, scraped_data):
+    print("📥 Updating Google Sheet with scraped Bravo data...")
+
+    records = sheet.get_all_records()
+    headers = sheet.row_values(1)
+    
+    # Uncomment to see the first few rows of the sheet (debugging)
+    # print("📄 First few sheet rows:")
+    # for row in records[:5]:
+    #     print(f"   • {row['הפקה']} | {row['תאריך']} | {row['ארגון']}")
+
+
+    # ✅ Make sure header names match your sheet exactly
+    name_col = headers.index("הפקה")
+    date_col = headers.index("תאריך")
+    org_col = headers.index("ארגון")
+    sold_col = headers.index("נמכרו")
+    updated_col = headers.index("עודכן לאחרונה")
+
+    updated_rows = 0
+    not_found = []
+
+
+    for seance in scraped_data:
+        # Uncomment to see each seance being checked (debugging)
+        # print(f"🔍 Checking seance: {seance['הפקה']} | {seance['תאריך']} | {seance['ארגון']}")
+        if seance["ארגון"] != "בראבו":
+            continue  # ✅ Skip non-Bravo entries
+        
+        found = False
+        for i, row in enumerate(records):
+            if (
+                row["הפקה"].strip() == seance["הפקה"].strip()
+                and row["תאריך"].strip() == seance["תאריך"].strip()
+                and row["ארגון"].strip() in seance["ארגון"].strip()
+            ):
+                sheet.update_cell(i + 2, sold_col + 1, seance["נמכרו"])
+                sheet.update_cell(i + 2, updated_col + 1, datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
+                updated_rows += 1
+                print(f"✅ Row {i + 2} updated for '{seance['הפקה']}' בתאריך {seance['תאריך']}")
+                found = True
+                break
+
+        if not found:
+            not_found.append((seance["הפקה"], seance["תאריך"]))
+
+    print(f"\n✅ Total updated rows: {updated_rows}")
+    if not_found:
+        print("⚠️ These Bravo seances were not found in the sheet:")
+        for name, date in not_found:
+            print(f"   • {name} בתאריך {date}")
+
+
+# Main execution
 if __name__ == "__main__":
     combined_data = []
 
@@ -211,7 +281,7 @@ if __name__ == "__main__":
         duplicate_keys = []
 
         for s in combined_data:
-            key = (s["שם ההופעה"], s["תאריך"])
+            key = (s["הפקה"], s["תאריך"])
             if key not in seen:
                 seen.add(key)
                 unique_data.append(s)
@@ -229,5 +299,9 @@ if __name__ == "__main__":
         headers = unique_data[0].keys()
         rows = [row.values() for row in unique_data]
         print(tabulate(rows, headers=headers, tablefmt="grid", stralign="center"))
+
+        # ✅ Update Google Sheet
+        worksheet = get_worksheet("דאטה אפשיט אופיס", "כרטיסים")
+        update_sheet_with_bravo_data(worksheet, unique_data)
     else:
         print("❌ לא נמצאו מופעים.")
