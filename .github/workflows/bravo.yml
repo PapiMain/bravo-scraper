@@ -39,6 +39,8 @@ jobs:
       #     python -c "import json; json.load(open('creds/service_account.json'))"
 
       - name: 🚀 Run Bravo scraper bot
+        env:
+          GOOGLE_CREDS_JSON: ${{ secrets.GOOGLE_CREDS_JSON }}
         run: python bravo_scraper.py
 
       # - name: 📤 Upload debug screenshots on failure
