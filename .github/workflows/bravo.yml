@@ -26,14 +26,16 @@ jobs:
       - name: 🔐 Set up secrets
         run: |
           mkdir -p creds
-          echo "${{ secrets.GOOGLE_CREDS_JSON }}" | sed 's/\\n/\n/g' > creds/service_account.json
+          echo "${{ secrets.GOOGLE_CREDS_JSON }}" > creds/service_account.json
           echo "USER1_EMAIL=${{ secrets.USER1_EMAIL }}" >> .env
           echo "USER1_PASSWORD=${{ secrets.USER1_PASSWORD }}" >> .env
           echo "USER2_EMAIL=${{ secrets.USER2_EMAIL }}" >> .env
           echo "USER2_PASSWORD=${{ secrets.USER2_PASSWORD }}" >> .env
 
       - name: 🐞 Debug JSON
-        run: cat creds/service_account.json
+        run: |
+          cat creds/service_account.json
+          python -c "import json; json.load(open('creds/service_account.json'))"
 
       - name: 🚀 Run bot
         run: python bravo_scraper.py
