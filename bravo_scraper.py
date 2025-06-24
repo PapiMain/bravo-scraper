@@ -35,38 +35,39 @@ def login_and_navigate(driver, username, password):
     print(f"🔐 Logging in as {username}")
     driver.get("https://kb.israelinfo.co.il/#login")
 
-    WebDriverWait(driver, 10).until(EC.presence_of_element_located((By.NAME, "login")))
-    driver.find_element(By.NAME, "login").send_keys(username)
-    driver.find_element(By.NAME, "password").send_keys(password)
-    driver.find_element(By.CSS_SELECTOR, "button.btn.btn-primary").click()
-
-    # Wait for redirect after login
-    WebDriverWait(driver, 10).until(lambda d: "kupatbarzel.co.il" in d.current_url)
-
-    redirected_url = driver.current_url
-    print(f"🌐 Redirected to: {redirected_url}")
-
-    # Append path to shows page
-    if "index.cgi" in redirected_url:
-        base_url = redirected_url.split("index.cgi")[0]
-    else:
-        base_url = redirected_url
-
-    target_url = f"{base_url}index.cgi#!/kassy/shows"
-    print(f"🚀 Navigating to Bravo Shows page: {target_url}")
-    driver.get(target_url)
-
     try:
-        WebDriverWait(driver, 10).until(
+        WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.NAME, "login")))
+        driver.find_element(By.NAME, "login").send_keys(username)
+        driver.find_element(By.NAME, "password").send_keys(password)
+        driver.find_element(By.CSS_SELECTOR, "button.btn.btn-primary").click()
+
+        # Wait for redirect
+        WebDriverWait(driver, 30).until(lambda d: "kupatbarzel.co.il" in d.current_url)
+        redirected_url = driver.current_url
+        print(f"🌐 Redirected to: {redirected_url}")
+
+        # Build target URL
+        if "index.cgi" in redirected_url:
+            base_url = redirected_url.split("index.cgi")[0]
+        else:
+            base_url = redirected_url
+
+        target_url = f"{base_url}index.cgi#!/kassy/shows"
+        print(f"🚀 Navigating to Bravo Shows page: {target_url}")
+        driver.get(target_url)
+
+        WebDriverWait(driver, 15).until(
             EC.frame_to_be_available_and_switch_to_it((By.ID, "frmKassa"))
         )
+
+        return extract_main_table_data(driver)
+
     except TimeoutException:
         screenshot_path = f"login_failed_{username.replace('@', '_at_')}.png"
         driver.save_screenshot(screenshot_path)
         print(f"❌ Timeout for user {username}. Screenshot saved to {screenshot_path}")
         raise
 
-    return extract_main_table_data(driver)
 
 
 def extract_main_table_data(driver):

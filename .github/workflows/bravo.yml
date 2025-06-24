@@ -34,3 +34,10 @@ jobs:
 
       - name: 🚀 Run bot
         run: python bravo_scraper.py
+
+      - name: 📤 Upload screenshots if login fails
+        if: failure()
+        uses: actions/upload-artifact@v3
+        with:
+          name: login-debug-screenshots
+          path: "*.png"
