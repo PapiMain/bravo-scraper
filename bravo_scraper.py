@@ -249,9 +249,11 @@ def get_worksheet(sheet_name: str, tab_name: str):
 
 
     with open("creds/service_account.json") as f:
+        raw = f.read()
+        print("✅ JSON preview:")
+        print(raw[:300])
         service_account_info = json.load(f)
         creds = Credentials.from_service_account_info(service_account_info, scopes=scope)
-
 
     # ✅ Fix private key newlines
     # if "private_key" in service_account_info:

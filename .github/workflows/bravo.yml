@@ -32,6 +32,7 @@ jobs:
           echo "USER2_EMAIL=${{ secrets.USER2_EMAIL }}" >> .env
           echo "USER2_PASSWORD=${{ secrets.USER2_PASSWORD }}" >> .env
 
+        # echo "${{ secrets.GOOGLE_CREDS_JSON }}" > creds/service_account.json
       # - name: 🐞 Debug service_account.json validity
       #   run: |
       #     cat creds/service_account.json
