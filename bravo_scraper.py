@@ -238,12 +238,18 @@ def run_for_user(username, password):
 # Get the Google Sheets worksheet
 def get_worksheet(sheet_name: str, tab_name: str):
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+
+    # DEBUG: Print first 300 chars of service account json to verify formatting
+    with open("creds/service_account.json", "r") as f:
+        content = f.read()
+        print("Service account json first 300 chars:")
+        print(content[:300])
+
     creds = ServiceAccountCredentials.from_json_keyfile_name("creds/service_account.json", scope)
     client = gspread.authorize(creds)
     sheet = client.open(sheet_name)
     return sheet.worksheet(tab_name)
 
-from datetime import datetime
 
 def update_sheet_with_bravo_data(sheet, scraped_data):
     print("📥 Updating Google Sheet with scraped Bravo data...")
