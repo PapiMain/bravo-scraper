@@ -2,8 +2,8 @@ name: Bravo Bot Daily Run
 
 on:
   schedule:
-    - cron: "0 4 * * *" # 7 AM Israel time (UTC+3)
-  workflow_dispatch: # allows manual trigger from GitHub UI
+    - cron: "0 4 * * *" # Runs at 7 AM Israel time (UTC+3)
+  workflow_dispatch: # Allows manual trigger from GitHub UI
 
 jobs:
   run-script:
@@ -23,24 +23,24 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: 🔐 Set up secrets
+      - name: 🔐 Set up secrets and credentials
         run: |
           mkdir -p creds
-          echo "${{ secrets.GOOGLE_CREDS_JSON }}" > creds/service_account.json
+          echo '${{ secrets.GOOGLE_CREDS_JSON }}' | jq . > creds/service_account.json
           echo "USER1_EMAIL=${{ secrets.USER1_EMAIL }}" >> .env
           echo "USER1_PASSWORD=${{ secrets.USER1_PASSWORD }}" >> .env
           echo "USER2_EMAIL=${{ secrets.USER2_EMAIL }}" >> .env
           echo "USER2_PASSWORD=${{ secrets.USER2_PASSWORD }}" >> .env
 
-      - name: 🐞 Debug JSON
+      - name: 🐞 Debug service_account.json validity
         run: |
           cat creds/service_account.json
           python -c "import json; json.load(open('creds/service_account.json'))"
 
-      - name: 🚀 Run bot
+      - name: 🚀 Run Bravo scraper bot
         run: python bravo_scraper.py
 
-      - name: 📤 Upload screenshots if login fails
+      - name: 📤 Upload debug screenshots on failure
         if: failure()
         uses: actions/upload-artifact@v4
         with:
