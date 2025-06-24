@@ -33,7 +33,9 @@ def create_driver():
 
 def login_and_navigate(driver, username, password):
     print(f"🔐 Logging in as {username}")
-    driver.get("https://kb.israelinfo.co.il/#login")
+    driver.get("https://kb.israelinfo.co.il")
+    driver.execute_script("window.location.hash = '#login';")
+
 
     try:
         WebDriverWait(driver, 20).until(EC.presence_of_element_located((By.NAME, "login")))
