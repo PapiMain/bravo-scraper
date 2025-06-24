@@ -32,6 +32,9 @@ jobs:
           echo "USER2_EMAIL=${{ secrets.USER2_EMAIL }}" >> .env
           echo "USER2_PASSWORD=${{ secrets.USER2_PASSWORD }}" >> .env
 
+      - name: 🐞 Debug JSON
+        run: cat creds/service_account.json
+
       - name: 🚀 Run bot
         run: python bravo_scraper.py
 
