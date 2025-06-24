@@ -241,17 +241,23 @@ def run_for_user(username, password):
 def get_worksheet(sheet_name: str, tab_name: str):
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 
-    with open("creds/service_account.json", "r") as f:
-        content = f.read()
-        print("Service account json first 300 chars:")
-        print(content[:300])
-        service_account_info = json.loads(content)
+    # with open("creds/service_account.json", "r") as f:
+    #     content = f.read()
+    #     print("Service account json first 300 chars:")
+    #     print(content[:300])
+    #     service_account_info = json.loads(content)
+
+
+    with open("creds/service_account.json") as f:
+        service_account_info = json.load(f)
+        creds = Credentials.from_service_account_info(service_account_info, scopes=scope)
+
 
     # ✅ Fix private key newlines
-    if "private_key" in service_account_info:
-        service_account_info["private_key"] = service_account_info["private_key"].replace("\\n", "\n")
+    # if "private_key" in service_account_info:
+    #     service_account_info["private_key"] = service_account_info["private_key"].replace("\\n", "\n")
 
-    creds = Credentials.from_service_account_info(service_account_info, scopes=scope)
+    # creds = Credentials.from_service_account_info(service_account_info, scopes=scope)
     client = gspread.authorize(creds)
     sheet = client.open(sheet_name)
     return sheet.worksheet(tab_name)
