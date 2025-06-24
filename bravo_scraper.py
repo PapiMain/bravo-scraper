@@ -12,6 +12,8 @@ from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 import time
 from tabulate import tabulate
+import traceback
+import sys
 # from collections import defaultdict
 
 # Load .env file
@@ -298,41 +300,47 @@ def update_sheet_with_bravo_data(sheet, scraped_data):
 
 # Main execution
 if __name__ == "__main__":
-    combined_data = []
+    try:
+        combined_data = []
 
-    combined_data += run_for_user(USER2_EMAIL, USER2_PASSWORD)
-    combined_data += run_for_user(USER1_EMAIL, USER1_PASSWORD)
+        combined_data += run_for_user(USER2_EMAIL, USER2_PASSWORD)
+        combined_data += run_for_user(USER1_EMAIL, USER1_PASSWORD)
 
-    print("\n📊 כל המופעים משני המשתמשים:\n")
+        print("\n📊 כל המופעים משני המשתמשים:\n")
 
-    if combined_data:
-        # ✅ Remove duplicates (same name + date), keep first
-        unique_data = []
-        seen = set()
-        duplicate_keys = []
+        if combined_data:
+            # ✅ Remove duplicates (same name + date), keep first
+            unique_data = []
+            seen = set()
+            duplicate_keys = []
 
-        for s in combined_data:
-            key = (s["הפקה"], s["תאריך"])
-            if key not in seen:
-                seen.add(key)
-                unique_data.append(s)
-            else:
-                duplicate_keys.append(key)
+            for s in combined_data:
+                key = (s["הפקה"], s["תאריך"])
+                if key not in seen:
+                    seen.add(key)
+                    unique_data.append(s)
+                else:
+                    duplicate_keys.append(key)
 
-        removed_count = len(combined_data) - len(unique_data)
-        if duplicate_keys:
-            print(f"⚠️ הוסרו {len(duplicate_keys)} שורות כפולות עם שם ותאריך זהים:")
-            for name, date in set(duplicate_keys):
-                print(f"   • {name} בתאריך {date}")
-            print()
+            removed_count = len(combined_data) - len(unique_data)
+            if duplicate_keys:
+                print(f"⚠️ הוסרו {len(duplicate_keys)} שורות כפולות עם שם ותאריך זהים:")
+                for name, date in set(duplicate_keys):
+                    print(f"   • {name} בתאריך {date}")
+                print()
 
-        # 🧾 Print table with only unique seances
-        headers = unique_data[0].keys()
-        rows = [row.values() for row in unique_data]
-        print(tabulate(rows, headers=headers, tablefmt="grid", stralign="center"))
+            # 🧾 Print table with only unique seances
+            headers = unique_data[0].keys()
+            rows = [row.values() for row in unique_data]
+            print(tabulate(rows, headers=headers, tablefmt="grid", stralign="center"))
 
-        # ✅ Update Google Sheet
-        worksheet = get_worksheet("דאטה אפשיט אופיס", "כרטיסים")
-        update_sheet_with_bravo_data(worksheet, unique_data)
-    else:
-        print("❌ לא נמצאו מופעים.")
+            # ✅ Update Google Sheet
+            worksheet = get_worksheet("דאטה אפשיט אופיס", "כרטיסים")
+            update_sheet_with_bravo_data(worksheet, unique_data)
+        else:
+            print("❌ לא נמצאו מופעים.")
+    
+    except Exception as e:
+        print("❌ ERROR encountered:")
+        traceback.print_exc()
+        sys.exit(1)

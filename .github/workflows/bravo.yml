@@ -32,17 +32,17 @@ jobs:
           echo "USER2_EMAIL=${{ secrets.USER2_EMAIL }}" >> .env
           echo "USER2_PASSWORD=${{ secrets.USER2_PASSWORD }}" >> .env
 
-      - name: 🐞 Debug service_account.json validity
-        run: |
-          cat creds/service_account.json
-          python -c "import json; json.load(open('creds/service_account.json'))"
+      # - name: 🐞 Debug service_account.json validity
+      #   run: |
+      #     cat creds/service_account.json
+      #     python -c "import json; json.load(open('creds/service_account.json'))"
 
       - name: 🚀 Run Bravo scraper bot
         run: python bravo_scraper.py
 
-      - name: 📤 Upload debug screenshots on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: login-debug-screenshots
-          path: "*.png"
+      # - name: 📤 Upload debug screenshots on failure
+      #   if: failure()
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: login-debug-screenshots
+      #     path: "*.png"
