@@ -240,7 +240,7 @@ def run_for_user(username, password):
 # Get the Google Sheets worksheet
 def get_worksheet(sheet_name: str, tab_name: str):
     scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-    
+
 # 🟢 Load JSON from env var, not file
     json_creds = os.environ["GOOGLE_CREDS_JSON"]
     service_account_info = json.loads(json_creds)
@@ -250,19 +250,6 @@ def get_worksheet(sheet_name: str, tab_name: str):
     client = gspread.authorize(creds)
     sheet = client.open(sheet_name)
     return sheet.worksheet(tab_name)
-
-# Uncomment if you want to load from a file instead of env var
-    # with open("creds/service_account.json") as f:
-    #     # raw = f.read()
-    #     # print("✅ JSON preview:")
-    #     # print(raw[:300])
-    #     service_account_info = json.load(f)
-    #     # creds = Credentials.from_service_account_info(service_account_info, scopes=scope)
-
-    # creds = Credentials.from_service_account_info(service_account_info, scopes=scope)
-    # client = gspread.authorize(creds)
-    # sheet = client.open(sheet_name)
-    # return sheet.worksheet(tab_name)
 
 
 def update_sheet_with_bravo_data(sheet, scraped_data):
