@@ -15,7 +15,7 @@ from tabulate import tabulate
 # from collections import defaultdict
 
 # Load .env file
-load_dotenv("creds/.env")
+load_dotenv(".env")
 
 # Read credentials
 USER1_EMAIL = os.getenv("USER1_EMAIL")
