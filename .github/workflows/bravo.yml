@@ -26,7 +26,7 @@ jobs:
       - name: 🔐 Set up secrets and credentials
         run: |
           mkdir -p creds
-          echo '${{ secrets.GOOGLE_CREDS_JSON }}' | jq . > creds/service_account.json
+          echo "${{ secrets.GOOGLE_CREDS_JSON }}" | sed 's/\\\\n/\\n/g' > creds/service_account.json
           echo "USER1_EMAIL=${{ secrets.USER1_EMAIL }}" >> .env
           echo "USER1_PASSWORD=${{ secrets.USER1_PASSWORD }}" >> .env
           echo "USER2_EMAIL=${{ secrets.USER2_EMAIL }}" >> .env
