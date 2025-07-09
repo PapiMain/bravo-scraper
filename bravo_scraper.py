@@ -11,6 +11,7 @@ import gspread
 from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 import time
+import pytz
 from tabulate import tabulate
 import traceback
 import sys
@@ -280,6 +281,9 @@ def update_sheet_with_bravo_data(sheet, scraped_data):
         # print(f"🔍 Checking seance: {seance['הפקה']} | {seance['תאריך']} | {seance['ארגון']}")
         if seance["ארגון"] != "בראבו":
             continue  # ✅ Skip non-Bravo entries
+            
+        israel_tz = pytz.timezone("Asia/Jerusalem")
+        now_israel = datetime.now(israel_tz).strftime('%d/%m/%Y %H:%M:%S')
         
         found = False
         for i, row in enumerate(records):
@@ -289,7 +293,7 @@ def update_sheet_with_bravo_data(sheet, scraped_data):
                 and row["ארגון"].strip() in seance["ארגון"].strip()
             ):
                 sheet.update_cell(i + 2, sold_col + 1, seance["נמכרו"])
-                sheet.update_cell(i + 2, updated_col + 1, datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
+                sheet.update_cell(i + 2, updated_col + 1, now_israel)
                 updated_rows += 1
                 print(f"✅ Row {i + 2} updated for '{seance['הפקה']}' בתאריך {seance['תאריך']}")
                 found = True
