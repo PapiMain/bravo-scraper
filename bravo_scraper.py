@@ -284,11 +284,13 @@ def update_sheet_with_bravo_data(sheet, scraped_data):
             
         israel_tz = pytz.timezone("Asia/Jerusalem")
         now_israel = datetime.now(israel_tz).strftime('%d/%m/%Y %H:%M:%S')
+        title_match = (seance["הפקה"].strip() in row["הפקה"].strip()
+            or row["הפקה"].strip() in seance["הפקה"].strip())
         
         found = False
         for i, row in enumerate(records):
             if (
-                row["הפקה"].strip() == seance["הפקה"].strip()
+                title_match
                 and row["תאריך"].strip() == seance["תאריך"].strip()
                 and row["ארגון"].strip() in seance["ארגון"].strip()
             ):
