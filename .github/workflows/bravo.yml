@@ -32,12 +32,6 @@ jobs:
           echo "USER2_EMAIL=${{ secrets.USER2_EMAIL }}" >> .env
           echo "USER2_PASSWORD=${{ secrets.USER2_PASSWORD }}" >> .env
 
-        # printf '%s' "${{ secrets.GOOGLE_CREDS_JSON }}" > creds/service_account.json
-      # - name: 🐞 Debug service_account.json validity
-      #   run: |
-      #     cat creds/service_account.json
-      #     python -c "import json; json.load(open('creds/service_account.json'))"
-
       - name: 🚀 Run Bravo scraper bot
         env:
           GOOGLE_CREDS_JSON: ${{ secrets.GOOGLE_CREDS_JSON }}
@@ -49,3 +43,22 @@ jobs:
       #   with:
       #     name: login-debug-screenshots
       #     path: "*.png"
+
+  keepalive:
+    runs-on: ubuntu-latest
+    needs: run-script
+    if: ${{ github.event_name == 'schedule' }} # only run automatically, not on manual trigger
+    steps:
+      - name: 🌀 Checkout repo
+        uses: actions/checkout@v4
+
+      - name: 💾 Keep workflows alive (once a month)
+        run: |
+          if [ "$(date +%d)" = "01" ]; then
+            git config user.name "github-actions"
+            git config user.email "github-actions@github.com"
+            git commit --allow-empty -m "chore: keep workflows alive $(date)"
+            git push
+          else
+            echo "Not the 1st of the month — skipping keepalive commit."
+          fi
