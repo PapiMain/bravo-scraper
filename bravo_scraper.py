@@ -275,15 +275,19 @@ def update_sheet_with_bravo_data(sheet, scraped_data):
     updated_rows = 0
     not_found = []
 
+    # 🔹 Prepare batch update list
+    batch_updates = []
+
+    israel_tz = pytz.timezone("Asia/Jerusalem")
+    now_israel = datetime.now(israel_tz).strftime('%d/%m/%Y %H:%M')
 
     for seance in scraped_data:
         # Uncomment to see each seance being checked (debugging)
         # print(f"🔍 Checking seance: {seance['הפקה']} | {seance['תאריך']} | {seance['ארגון']}")
+        
         if seance["ארגון"] != "בראבו":
             continue  # ✅ Skip non-Bravo entries
             
-        israel_tz = pytz.timezone("Asia/Jerusalem")
-        now_israel = datetime.now(israel_tz).strftime('%d/%m/%Y %H:%M:%S')
         
         found = False
         for i, row in enumerate(records):
@@ -294,8 +298,16 @@ def update_sheet_with_bravo_data(sheet, scraped_data):
                 and row["תאריך"].strip() == seance["תאריך"].strip()
                 and row["ארגון"].strip() in seance["ארגון"].strip()
             ):
-                sheet.update_cell(i + 2, sold_col + 1, seance["נמכרו"])
-                sheet.update_cell(i + 2, updated_col + 1, now_israel)
+                 # 🔹 Add cell updates to batch instead of updating each individually
+                batch_updates.append({
+                    'range': gspread.utils.rowcol_to_a1(i + 2, sold_col + 1),
+                    'values': [[seance["נמכרו"]]]
+                })
+                batch_updates.append({
+                    'range': gspread.utils.rowcol_to_a1(i + 2, updated_col + 1),
+                    'values': [[now_israel]]
+                })
+                
                 updated_rows += 1
                 print(f"✅ Row {i + 2} updated for '{seance['הפקה']}' בתאריך {seance['תאריך']}")
                 found = True
@@ -304,6 +316,10 @@ def update_sheet_with_bravo_data(sheet, scraped_data):
         if not found:
             not_found.append((seance["הפקה"], seance["תאריך"]))
 
+    # 🔹 Execute all updates in one batch
+    if batch_updates:
+        sheet.batch_update(batch_updates)
+        
     print(f"\n✅ Total updated rows: {updated_rows}")
     if not_found:
         print("⚠️ These Bravo seances were not found in the sheet:")
