@@ -3,6 +3,7 @@ name: Bravo Bot Daily Run
 on:
   schedule:
     - cron: "0 4 * * *" # Runs at 7 AM Israel time (UTC+3)
+    - cron: "0 11 * * *" # 2 PM Israel time
   workflow_dispatch: # Allows manual trigger from GitHub UI
 
 jobs:
