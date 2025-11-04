@@ -291,8 +291,17 @@ def update_sheet_with_bravo_data(sheet, scraped_data):
         
         found = False
         for i, row in enumerate(records):
-            title_match = (seance["הפקה"].strip() in row["הפקה"].strip()
-                or row["הפקה"].strip() in seance["הפקה"].strip())
+            # Normalize seance name
+            seance_name = seance["הפקה"].strip()
+            row_name = row["הפקה"].strip()
+        
+            # Special handling for סימבה
+            if "סימבה" in seance_name and "סוואנה" not in seance_name and "אפריקה" not in seance_name:
+                seance_name = "סימבה מלך הג׳ונגל"
+                
+            # Match check
+            title_match = (seance_name == row_name)
+
             if (
                 title_match
                 and row["תאריך"].strip() == seance["תאריך"].strip()
@@ -309,7 +318,7 @@ def update_sheet_with_bravo_data(sheet, scraped_data):
                 })
                 
                 updated_rows += 1
-                print(f"✅ Row {i + 2} updated for '{seance['הפקה']}' בתאריך {seance['תאריך']}")
+                print(f"✅ Row {i + 2} updated for '{seance_name}' בתאריך {seance['תאריך']}")
                 found = True
                 break
 
