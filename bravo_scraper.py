@@ -300,8 +300,6 @@ def update_sheet_with_bravo_data(sheet, scraped_data):
                 seance_name = "סימבה מלך הג׳ונגל"
                 
             # Match check
-            title_match = (seance_name == row_name)
-
             if (
                 title_match
                 and row["תאריך"].strip() == seance["תאריך"].strip()
