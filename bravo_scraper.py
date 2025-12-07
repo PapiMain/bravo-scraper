@@ -301,8 +301,8 @@ def update_sheet_with_bravo_data(sheet, scraped_data):
                 
             # Match check
             title_match = (
-                seance["הפקה"].strip() in row["הפקה"].strip() or
-                row["הפקה"].strip() in seance["הפקה"].strip()
+                seance_name in row_name or
+                row_name in seance_name
             )
 
             if (
