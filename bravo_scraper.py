@@ -297,7 +297,7 @@ def update_sheet_with_bravo_data(sheet, scraped_data):
         
             # Special handling for סימבה
             if "סימבה" in seance_name and "סוואנה" not in seance_name and "אפריקה" not in seance_name:
-                seance_name = "סימבה מלך הג׳ונגל"
+                seance_name = "סימבה מלך"
                 
             # Match check
             title_match = (
