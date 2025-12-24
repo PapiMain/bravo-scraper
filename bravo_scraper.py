@@ -304,7 +304,12 @@ def update_sheet_with_bravo_data(sheet, scraped_data):
                 seance_name in row_name or
                 row_name in seance_name
             )
+            def sold_to_int(value):
+                value = str(value).strip()
+                return int(value) if value.isdigit() else 0
 
+            sold_number = sold_to_int(seance["נמכרו"])
+            
             if (
                 title_match
                 and row["תאריך"].strip() == seance["תאריך"].strip()
@@ -313,7 +318,7 @@ def update_sheet_with_bravo_data(sheet, scraped_data):
                  # 🔹 Add cell updates to batch instead of updating each individually
                 batch_updates.append({
                     'range': gspread.utils.rowcol_to_a1(i + 2, sold_col + 1),
-                    'values': [[seance["נמכרו"]]]
+                    'values': [[sold_number]]
                 })
                 batch_updates.append({
                     'range': gspread.utils.rowcol_to_a1(i + 2, updated_col + 1),
