@@ -385,7 +385,7 @@ def update_appsheet_with_bravo_data(scraped_data):
             #     not_found.append((seance["הפקה"], row_name, app_date_obj))
         
         if not found:
-            not_found.append((seance["הפקה"], seance["תאריך"]))
+            not_found.append((seance["הפקה"], row_name, seance["תאריך"]))
 
     # 3. Send the batch update
     if batch_updates:
