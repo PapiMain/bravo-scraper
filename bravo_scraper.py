@@ -266,11 +266,6 @@ def update_appsheet_with_bravo_data(scraped_data):
     app_id = os.getenv("APPSHEET_APP_ID")
     app_key = os.getenv("APPSHEET_APP_KEY")
     
-    # 1. First, we MUST get the existing data from AppSheet to find the row Keys
-    # This replaces sheet.get_all_records()
-    read_url = f"https://api.appsheet.com/api/v2/apps/{app_id}/tables/כרטיסים/Action"
-    headers = {"ApplicationToken": app_key, "Content-Type": "application/json"}
-    
     """Main logic: Matches scraped data against AppSheet records and updates them."""
     table_name = "הופעות עתידיות"
     records = get_appsheet_data(table_name)
@@ -322,6 +317,7 @@ def update_appsheet_with_bravo_data(scraped_data):
                 batch_updates.append(update_row)
                 updated_rows_count += 1
                 found = True
+                print(f"✅ נמצאה התאמה: {seance_name} בתאריך {seance['תאריך']}")
                 break
         
         if not found:
@@ -329,15 +325,31 @@ def update_appsheet_with_bravo_data(scraped_data):
 
     # 3. Send the batch update
     if batch_updates:
-        update_payload = {
+        print(f"📤 שולח {len(batch_updates)} שורות לעדכון ב-AppSheet...")
+
+        url = f"https://api.appsheet.com/api/v2/apps/{app_id}/tables/{table_name}/Action"
+        headers = {
+            "ApplicationToken": app_key,
+            "Content-Type": "application/json"
+        }
+        
+        body = {
             "Action": "Edit",
+            "Properties": {
+                "Locale": "he-IL",
+                "TimeZone": "Israel Standard Time"
+            },
             "Rows": batch_updates
         }
-        update_res = requests.post(read_url, headers=headers, json=update_payload)
-        if update_res.status_code == 200:
-            print(f"✅ Successfully updated {updated_rows_count} rows in AppSheet.")
-        else:
-            print(f"❌ Update failed: {update_res.text}")
+
+        try:
+            response = requests.post(url, headers=headers, json=body)
+            if response.status_code == 200:
+                print(f"🎉 העדכון הסתיים בהצלחה! עודכנו {updated_rows_count} שורות.")
+            else:
+                print(f"❌ שגיאת API (סטטוס {response.status_code}): {response.text}")
+        except Exception as e:
+            print(f"❌ נכשל בשליחת הבקשה: {e}")
 
     if not_found:
         print("⚠️ These Bravo seances were not found in AppSheet:")
