@@ -331,22 +331,14 @@ def update_appsheet_with_bravo_data(scraped_data):
 
         url = f"https://api.appsheet.com/api/v2/apps/{app_id}/tables/{table_name}/Action"
         
-        headers = {
-            "ApplicationAccessKey": app_key,
-            "Content-Type": "application/json"
-        }
-        
         body = {
             "Action": "Edit",
-            "Properties": {
-                "Locale": "he-IL",
-                "TimeZone": "Israel Standard Time"
-            },
+            "Properties": {"Locale": "en-US"},
             "Rows": batch_updates
         }
 
         try:
-            response = requests.post(url, headers=headers, json=body)
+            response = requests.post(url, headers={"ApplicationAccessKey": app_key}, json=body)
             print(f"🚀 AppSheet API Status: {response.status_code}")
             if response.status_code == 200:
                 print(f"🎉 העדכון הסתיים בהצלחה! עודכנו {updated_rows_count} שורות.")
