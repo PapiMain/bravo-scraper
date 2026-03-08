@@ -385,7 +385,7 @@ def update_appsheet_with_bravo_data(scraped_data):
             #     not_found.append((seance["הפקה"], row_name, app_date_obj))
         
         if not found:
-            not_found.append((seance["הפקה"], row_name, seance["תאריך"]))
+            not_found.append((seance["הפקה"], row_name, seance["תאריך"], row_date_raw))
 
     # 3. Send the batch update
     if batch_updates:
@@ -412,8 +412,8 @@ def update_appsheet_with_bravo_data(scraped_data):
     if not_found:
         print("\n⚠️ Near-misses or Mismatches found (Date matched, Name didn't):")
         # Fixed the unpacking here (3 variables instead of 2)
-        for s_name, r_name, r_date in not_found:
-            print(f"   • Scraped: '{s_name}' | AppSheet Row: '{r_name}' | Date: {r_date}")
+        for s_name, r_name, r_date, r_date_raw in not_found:
+            print(f"   • Scraped: '{s_name}' | AppSheet Row: '{r_name}' | Scraped Date: {r_date}, AppSheet Date: '{r_date_raw}'")
 
 # Main execution
 if __name__ == "__main__":
