@@ -337,11 +337,12 @@ def update_appsheet_with_bravo_data(scraped_data):
                 found = True
                 print(f"✅ נמצאה התאמה: {seance_name} בתאריך {seance['תאריך']}")
                 break
-            elif app_date_obj == scraped_date_obj:
-                not_found.append((seance["הפקה"], row_name, app_date_obj))
+            # for debugging near-misses:
+            # elif app_date_obj == scraped_date_obj:
+            #     not_found.append((seance["הפקה"], row_name, app_date_obj))
         
-        # if not found:
-        #     not_found.append((seance["הפקה"], seance["תאריך"]))
+        if not found:
+            not_found.append((seance["הפקה"], seance["תאריך"]))
 
     # 3. Send the batch update
     if batch_updates:
@@ -365,10 +366,6 @@ def update_appsheet_with_bravo_data(scraped_data):
         except Exception as e:
             print(f"❌ נכשל בשליחת הבקשה: {e}")
 
-    # if not_found:
-    #     print("⚠️ These Bravo seances were not found in AppSheet:")
-    #     for name, date in not_found:
-    #         print(f"   • {name} בתאריך {date}")
     if not_found:
         print("\n⚠️ Near-misses or Mismatches found (Date matched, Name didn't):")
         # Fixed the unpacking here (3 variables instead of 2)
