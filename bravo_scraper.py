@@ -295,15 +295,23 @@ def update_appsheet_with_bravo_data(scraped_data):
 
         for row in records:
             row_name = str(row.get("הפקה", "")).strip()
-            row_date = str(row.get("תאריך", "")).strip()
+            row_date_raw = str(row.get("תאריך", "")).strip()
             row_org = str(row.get("ארגון", "")).strip()
+
+            app_date_obj = row_date_raw
+            for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y"):
+                try:
+                    # Convert to a date object (removes time if present)
+                    app_date_obj =  datetime.strptime(row_date_raw, fmt).date()
+                except ValueError:
+                    continue
 
             # Your exact matching conditions
             title_match = (seance_name in row_name or row_name in seance_name)
             
             if (
                 title_match
-                and row_date == seance["תאריך"].strip()
+                and app_date_obj == seance["תאריך"].strip()
                 and row_org in seance["ארגון"].strip()
             ):
                 # הכנת העדכון - חובה לכלול את ה-ID (או ה-Key של הטבלה שלך)
@@ -319,8 +327,8 @@ def update_appsheet_with_bravo_data(scraped_data):
                 found = True
                 print(f"✅ נמצאה התאמה: {seance_name} בתאריך {seance['תאריך']}")
                 break
-            elif row_date == seance["תאריך"].strip():
-                not_found.append((seance["הפקה"], row_name, row_date))
+            elif app_date_obj == seance["תאריך"].strip():
+                not_found.append((seance["הפקה"], row_name, app_date_obj))
         
         # if not found:
         #     not_found.append((seance["הפקה"], seance["תאריך"]))
@@ -329,7 +337,7 @@ def update_appsheet_with_bravo_data(scraped_data):
     if batch_updates:
         print(f"📤 שולח {len(batch_updates)} שורות לעדכון ב-AppSheet...")
 
-        url = f"https://api.appsheet.com/api/v2/apps/{app_id}/tables/{table_name}/Action"
+        url = f"https://api.appsheet.com/api/v1/apps/{app_id}/tables/{table_name}/Action"
         
         body = {
             "Action": "Edit",
