@@ -286,6 +286,12 @@ def update_appsheet_with_bravo_data(scraped_data):
         if seance["ארגון"] != "בראבו":
             continue
 
+        try:
+            scraped_date_obj = datetime.strptime(seance["תאריך"].strip(), "%d/%m/%Y").date()
+        except Exception as e:
+            print(f"❌ Error parsing scraped date {seance['תאריך']}: {e}")
+            continue
+
         found = False
         seance_name = seance["הפקה"].strip()
         
@@ -298,20 +304,24 @@ def update_appsheet_with_bravo_data(scraped_data):
             row_date_raw = str(row.get("תאריך", "")).strip()
             row_org = str(row.get("ארגון", "")).strip()
 
-            app_date_obj = row_date_raw
+            # 2. CONVERT APPSHEET DATE TO OBJECT
+            app_date_obj = None
             for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y"):
                 try:
-                    # Convert to a date object (removes time if present)
-                    app_date_obj =  datetime.strptime(row_date_raw, fmt).date()
+                    app_date_obj = datetime.strptime(row_date_raw, fmt).date()
+                    break # ✅ Added break: Stop once we find the right format
                 except ValueError:
                     continue
+
+            if not app_date_obj:
+                continue
 
             # Your exact matching conditions
             title_match = (seance_name in row_name or row_name in seance_name)
             
             if (
                 title_match
-                and app_date_obj == seance["תאריך"].strip()
+                and app_date_obj == scraped_date_obj
                 and row_org in seance["ארגון"].strip()
             ):
                 # הכנת העדכון - חובה לכלול את ה-ID (או ה-Key של הטבלה שלך)
@@ -327,7 +337,7 @@ def update_appsheet_with_bravo_data(scraped_data):
                 found = True
                 print(f"✅ נמצאה התאמה: {seance_name} בתאריך {seance['תאריך']}")
                 break
-            elif app_date_obj == seance["תאריך"].strip():
+            elif app_date_obj == scraped_date_obj:
                 not_found.append((seance["הפקה"], row_name, app_date_obj))
         
         # if not found:
