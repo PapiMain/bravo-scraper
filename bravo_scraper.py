@@ -221,6 +221,47 @@ def extract_seances(driver, show_url, show_name):
 
     return seances
 
+def consolidate_duplicate_shows(data):
+    print("🔄 Consolidating duplicates (summing 'נמכרו' and 'נשאר למכירה')...")
+    consolidated = {}
+
+    for row in data:
+        # 1. Define the unique key: (Show Name, Hall, Date)
+        key = (
+            row.get("הפקה", "").strip(), 
+            row.get("אולם", "").strip(), 
+            row.get("תאריך", "").strip(),
+            row.get("שעה", "").strip()
+        )
+
+        # 2. Safely parse the numbers (defaults to 0 if empty or invalid text)
+        try:
+            sold = int(str(row.get("נמכרו", "0")).strip() or 0)
+        except ValueError:
+            sold = 0
+
+        try:
+            available = int(str(row.get("נשאר למכירה", "0")).strip() or 0)
+        except ValueError:
+            available = 0
+
+        # 3. Check if we already have this show/hall/date combo
+        if key in consolidated:
+            # Add to the existing totals
+            consolidated[key]["נמכרו"] += sold
+            consolidated[key]["נשאר למכירה"] += available
+        else:
+            # First time seeing this combo, add it to our dictionary
+            new_row = row.copy()
+            new_row["נמכרו"] = sold
+            new_row["נשאר למכירה"] = available
+            consolidated[key] = new_row
+
+    # Return the consolidated dictionary as a simple list
+    result = list(consolidated.values())
+    print(f"✅ Consolidated list from {len(data)} rows down to {len(result)} unique shows.")
+    return result
+
 # 🚀 Main function to run the scraper for a given user
 def run_for_user(username, password):
     driver = create_driver()
@@ -237,7 +278,9 @@ def run_for_user(username, password):
     finally:
         driver.quit()
 
-    return all_data
+    consolidated_data = consolidate_duplicate_shows(all_data)
+
+    return consolidated_data
 
 # 📊 Fetch existing AppSheet data for matching
 def get_appsheet_data(table_name):
