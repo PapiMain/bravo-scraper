@@ -249,7 +249,7 @@ def get_appsheet_data(table_name):
     try:
         print(f"⏳ Fetching all rows from table: {table_name}")
         # Using selector="true" is the standard way to say "Give me everything"
-        rows = client.find_items(table_name, selector="true")
+        rows = client.find_items(table_name, "")
         
         if rows:
             print(f"✅ Successfully retrieved {len(rows)} rows from {table_name}")
@@ -272,7 +272,7 @@ def update_appsheet_with_bravo_data(scraped_data):
     headers = {"ApplicationToken": app_key, "Content-Type": "application/json"}
     
     """Main logic: Matches scraped data against AppSheet records and updates them."""
-    table_name = "כרטיסים"
+    table_name = "הופעות עתידיות"
     records = get_appsheet_data(table_name)
     
     if not records:
