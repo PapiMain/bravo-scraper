@@ -306,30 +306,33 @@ def update_appsheet_with_bravo_data(scraped_data):
                 and row_date == seance["תאריך"].strip()
                 and row_org in seance["ארגון"].strip()
             ):
-                # We found the row! Now we prepare the update using the row's Key
-                # AppSheet requires the Key column to be included in the update.
-                # Replace 'ID' with whatever your Key column name is (e.g., '_RowNumber')
+                # הכנת העדכון - חובה לכלול את ה-ID (או ה-Key של הטבלה שלך)
+                # אם ה-Key שלך הוא לא "ID", שנה את השורה למטה לשם העמודה הנכון (למשל "_RowNumber")
+
+                batch_updates.append({
+                    "ID": row["ID"], 
+                    "נמכרו": int(seance["נמכרו"]) if str(seance["נמכרו"]).isdigit() else 0,
+                    "עודכן לאחרונה": now_israel
+                })
                 
-                update_row = row.copy() 
-                update_row["נמכרו"] = int(seance["נמכרו"]) if str(seance["נמכרו"]).isdigit() else 0
-                update_row["עודכן לאחרונה"] = now_israel
-                
-                batch_updates.append(update_row)
                 updated_rows_count += 1
                 found = True
                 print(f"✅ נמצאה התאמה: {seance_name} בתאריך {seance['תאריך']}")
                 break
+            elif row_date == seance["תאריך"].strip():
+                not_found.append((seance["הפקה"], row_name, row_date))
         
-        if not found:
-            not_found.append((seance["הפקה"], seance["תאריך"]))
+        # if not found:
+        #     not_found.append((seance["הפקה"], seance["תאריך"]))
 
     # 3. Send the batch update
     if batch_updates:
         print(f"📤 שולח {len(batch_updates)} שורות לעדכון ב-AppSheet...")
 
         url = f"https://api.appsheet.com/api/v2/apps/{app_id}/tables/{table_name}/Action"
+        
         headers = {
-            "ApplicationToken": app_key,
+            "ApplicationAccessKey": app_key,
             "Content-Type": "application/json"
         }
         
@@ -344,6 +347,7 @@ def update_appsheet_with_bravo_data(scraped_data):
 
         try:
             response = requests.post(url, headers=headers, json=body)
+            print(f"🚀 AppSheet API Status: {response.status_code}")
             if response.status_code == 200:
                 print(f"🎉 העדכון הסתיים בהצלחה! עודכנו {updated_rows_count} שורות.")
             else:
@@ -351,10 +355,15 @@ def update_appsheet_with_bravo_data(scraped_data):
         except Exception as e:
             print(f"❌ נכשל בשליחת הבקשה: {e}")
 
+    # if not_found:
+    #     print("⚠️ These Bravo seances were not found in AppSheet:")
+    #     for name, date in not_found:
+    #         print(f"   • {name} בתאריך {date}")
     if not_found:
-        print("⚠️ These Bravo seances were not found in AppSheet:")
-        for name, date in not_found:
-            print(f"   • {name} בתאריך {date}")
+        print("\n⚠️ Near-misses or Mismatches found (Date matched, Name didn't):")
+        # Fixed the unpacking here (3 variables instead of 2)
+        for s_name, r_name, r_date in not_found:
+            print(f"   • Scraped: '{s_name}' | AppSheet Row: '{r_name}' | Date: {r_date}")
 
 # Main execution
 if __name__ == "__main__":
