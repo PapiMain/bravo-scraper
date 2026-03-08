@@ -7,8 +7,6 @@ from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import NoSuchElementException
 from selenium.common.exceptions import TimeoutException
-import gspread
-from oauth2client.service_account import ServiceAccountCredentials
 from datetime import datetime
 import time
 import pytz
@@ -16,7 +14,8 @@ from tabulate import tabulate
 import traceback
 import sys
 import json
-from google.oauth2.service_account import Credentials
+import requests
+from py_appsheet import AppSheetClient # Ensure this is installed: pip install py-appsheet
 # from collections import defaultdict
 
 # Load .env file
@@ -28,6 +27,7 @@ USER1_PASSWORD = os.getenv("USER1_PASSWORD")
 USER2_EMAIL = os.getenv("USER2_EMAIL")
 USER2_PASSWORD = os.getenv("USER2_PASSWORD")
 
+# Optional: Validate credentials are present
 def create_driver():
     options = Options()
     
@@ -62,7 +62,7 @@ def create_driver():
 
     return driver
 
-
+# 🔐 Login and navigate to shows page
 def login_and_navigate(driver, username, password):
     print(f"🔐 Logging in as {username}")
     driver.get("https://kb.israelinfo.co.il")
@@ -103,8 +103,7 @@ def login_and_navigate(driver, username, password):
         print(f"❌ Timeout for user {username}. Screenshot saved to {screenshot_path}")
         raise
 
-
-
+# 📄 Extract show names and details links from the main table
 def extract_main_table_data(driver):
     print("📄 Extracting main show table rows...")
     shows = []
@@ -141,6 +140,7 @@ def extract_main_table_data(driver):
 
     return shows
 
+# 🎟️ Extract seance details from the show page
 def extract_seances(driver, show_url, show_name):
     print(f"🌐 Opening seance page: {show_url}")
     driver.get(show_url)
@@ -221,6 +221,7 @@ def extract_seances(driver, show_url, show_name):
 
     return seances
 
+# 🚀 Main function to run the scraper for a given user
 def run_for_user(username, password):
     driver = create_driver()
     all_data = []
@@ -238,111 +239,110 @@ def run_for_user(username, password):
 
     return all_data
 
-# Get the Google Sheets worksheet
-def get_worksheet(sheet_name: str, tab_name: str):
-    scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+# 📊 Fetch existing AppSheet data for matching
+def get_appsheet_data(table_name):
+    """Uses the py-appsheet library to fetch data."""
+    client = AppSheetClient(
+        app_id=os.environ.get("APPSHEET_APP_ID"),
+        api_key=os.environ.get("APPSHEET_APP_KEY"),
+    )
+    try:
+        print(f"⏳ Fetching all rows from table: {table_name}")
+        # Using selector="true" is the standard way to say "Give me everything"
+        rows = client.find_items(table_name, selector="true")
+        
+        if rows:
+            print(f"✅ Successfully retrieved {len(rows)} rows from {table_name}")
+            return rows
+        return []
+    except Exception as e:
+        print(f"❌ py-appsheet error: {e}")
+        return []
 
-# 🟢 Load JSON from env var, not file
-    json_creds = os.environ["GOOGLE_CREDS_JSON"]
-    service_account_info = json.loads(json_creds)
-    service_account_info["private_key"] = service_account_info["private_key"].replace("\\n", "\n")
-
-    creds = Credentials.from_service_account_info(service_account_info, scopes=scope)
-    client = gspread.authorize(creds)
-    sheet = client.open(sheet_name)
-    return sheet.worksheet(tab_name)
-
-
-def update_sheet_with_bravo_data(sheet, scraped_data):
-    print("📥 Updating Google Sheet with scraped Bravo data...")
-
-    records = sheet.get_all_records()
-    headers = sheet.row_values(1)
+# 🔄 Update AppSheet with scraped data
+def update_appsheet_with_bravo_data(scraped_data):
+    print("📥 Processing data for AppSheet API...")
     
-    # Uncomment to see the first few rows of the sheet (debugging)
-    # print("📄 First few sheet rows:")
-    # for row in records[:5]:
-    #     print(f"   • {row['הפקה']} | {row['תאריך']} | {row['ארגון']}")
-
-
-    # ✅ Make sure header names match your sheet exactly
-    name_col = headers.index("הפקה")
-    date_col = headers.index("תאריך")
-    org_col = headers.index("ארגון")
-    sold_col = headers.index("נמכרו")
-    updated_col = headers.index("עודכן לאחרונה")
-
-    updated_rows = 0
-    not_found = []
-
-    # 🔹 Prepare batch update list
-    batch_updates = []
+    app_id = os.getenv("APPSHEET_APP_ID")
+    app_key = os.getenv("APPSHEET_APP_KEY")
+    
+    # 1. First, we MUST get the existing data from AppSheet to find the row Keys
+    # This replaces sheet.get_all_records()
+    read_url = f"https://api.appsheet.com/api/v2/apps/{app_id}/tables/כרטיסים/Action"
+    headers = {"ApplicationToken": app_key, "Content-Type": "application/json"}
+    
+    """Main logic: Matches scraped data against AppSheet records and updates them."""
+    table_name = "כרטיסים"
+    records = get_appsheet_data(table_name)
+    
+    if not records:
+        print("❌ No records found to update.")
+        return
 
     israel_tz = pytz.timezone("Asia/Jerusalem")
     now_israel = datetime.now(israel_tz).strftime('%d/%m/%Y %H:%M')
+    
+    batch_updates = []
+    not_found = []
+    updated_rows_count = 0
 
+    # 2. Re-implement your exact matching logic
     for seance in scraped_data:
-        # Uncomment to see each seance being checked (debugging)
-        # print(f"🔍 Checking seance: {seance['הפקה']} | {seance['תאריך']} | {seance['ארגון']}")
-        
         if seance["ארגון"] != "בראבו":
-            continue  # ✅ Skip non-Bravo entries
-            
-        
-        found = False
-        for i, row in enumerate(records):
-            # Normalize seance name
-            seance_name = seance["הפקה"].strip()
-            row_name = row["הפקה"].strip()
-        
-            # Special handling for סימבה
-            if "סימבה" in seance_name and "סוואנה" not in seance_name and "אפריקה" not in seance_name:
-                seance_name = "סימבה מלך"
-                
-            # Match check
-            title_match = (
-                seance_name in row_name or
-                row_name in seance_name
-            )
-            def sold_to_int(value):
-                value = str(value).strip()
-                return int(value) if value.isdigit() else 0
+            continue
 
-            sold_number = sold_to_int(seance["נמכרו"])
+        found = False
+        seance_name = seance["הפקה"].strip()
+        
+        # Your specific Simba logic preserved
+        if "סימבה" in seance_name and "סוואנה" not in seance_name and "אפריקה" not in seance_name:
+            seance_name = "סימבה מלך"
+
+        for row in records:
+            row_name = str(row.get("הפקה", "")).strip()
+            row_date = str(row.get("תאריך", "")).strip()
+            row_org = str(row.get("ארגון", "")).strip()
+
+            # Your exact matching conditions
+            title_match = (seance_name in row_name or row_name in seance_name)
             
             if (
                 title_match
-                and row["תאריך"].strip() == seance["תאריך"].strip()
-                and row["ארגון"].strip() in seance["ארגון"].strip()
+                and row_date == seance["תאריך"].strip()
+                and row_org in seance["ארגון"].strip()
             ):
-                 # 🔹 Add cell updates to batch instead of updating each individually
-                batch_updates.append({
-                    'range': gspread.utils.rowcol_to_a1(i + 2, sold_col + 1),
-                    'values': [[sold_number]]
-                })
-                batch_updates.append({
-                    'range': gspread.utils.rowcol_to_a1(i + 2, updated_col + 1),
-                    'values': [[now_israel]]
-                })
+                # We found the row! Now we prepare the update using the row's Key
+                # AppSheet requires the Key column to be included in the update.
+                # Replace 'ID' with whatever your Key column name is (e.g., '_RowNumber')
                 
-                updated_rows += 1
-                print(f"✅ Row {i + 2} updated for '{seance_name}' בתאריך {seance['תאריך']}")
+                update_row = row.copy() 
+                update_row["נמכרו"] = int(seance["נמכרו"]) if str(seance["נמכרו"]).isdigit() else 0
+                update_row["עודכן לאחרונה"] = now_israel
+                
+                batch_updates.append(update_row)
+                updated_rows_count += 1
                 found = True
                 break
-
+        
         if not found:
             not_found.append((seance["הפקה"], seance["תאריך"]))
 
-    # 🔹 Execute all updates in one batch
+    # 3. Send the batch update
     if batch_updates:
-        sheet.batch_update(batch_updates)
-        
-    print(f"\n✅ Total updated rows: {updated_rows}")
+        update_payload = {
+            "Action": "Edit",
+            "Rows": batch_updates
+        }
+        update_res = requests.post(read_url, headers=headers, json=update_payload)
+        if update_res.status_code == 200:
+            print(f"✅ Successfully updated {updated_rows_count} rows in AppSheet.")
+        else:
+            print(f"❌ Update failed: {update_res.text}")
+
     if not_found:
-        print("⚠️ These Bravo seances were not found in the sheet:")
+        print("⚠️ These Bravo seances were not found in AppSheet:")
         for name, date in not_found:
             print(f"   • {name} בתאריך {date}")
-
 
 # Main execution
 if __name__ == "__main__":
@@ -381,8 +381,7 @@ if __name__ == "__main__":
             print(tabulate(rows, headers=headers, tablefmt="grid", stralign="center"))
 
             # ✅ Update Google Sheet
-            worksheet = get_worksheet("דאטה אפשיט אופיס", "כרטיסים")
-            update_sheet_with_bravo_data(worksheet, unique_data)
+            update_appsheet_with_bravo_data(unique_data)
         else:
             print("❌ לא נמצאו מופעים.")
     
