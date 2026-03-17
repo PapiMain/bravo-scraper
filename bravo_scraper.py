@@ -320,7 +320,7 @@ def update_appsheet_with_bravo_data(scraped_data):
     israel_tz = pytz.timezone("Asia/Jerusalem")
     # Format: 2026-03-17 14:09:00
     now_israel = datetime.now(israel_tz).strftime('%Y-%m-%d %H:%M:00')    
-    
+
     batch_updates = []
     not_found = []
     updated_rows_count = 0
@@ -396,7 +396,10 @@ def update_appsheet_with_bravo_data(scraped_data):
         
         body = {
             "Action": "Edit",
-            "Properties": {"Locale": "en-US"},
+            "Properties": {
+            "Locale": "en-US",
+            "Timezone": "Israel Standard Time"
+            },
             "Rows": batch_updates
         }
 
