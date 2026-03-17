@@ -391,7 +391,7 @@ def update_appsheet_with_bravo_data(scraped_data):
     if batch_updates:
         print(f"📤 שולח {len(batch_updates)} שורות לעדכון ב-AppSheet...")
 
-        url = f"https://api.appsheet.com/api/v1/apps/{app_id}/tables/{table_name}/Action"
+        url = f"https://api.appsheet.com/api/v1/apps/{app_id}/tables/כרטיסים/Action"
         
         body = {
             "Action": "Edit",
