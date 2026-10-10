@@ -16,6 +16,9 @@ import sys
 import json
 import requests
 from py_appsheet import AppSheetClient # Ensure this is installed: pip install py-appsheet
+from papi_sync_guard import (MISSING, RunReport, VolumeGuard, build_alias_index,
+                             find_single_match, safe_int, titles_match,
+                             verify_appsheet_response)
 # from collections import defaultdict
 
 # Load .env file
@@ -303,121 +306,167 @@ def get_appsheet_data(table_name):
         return []
 
 # 🔄 Update AppSheet with scraped data
+# ─────────────────────────────────────────────────────────────────────
+# כינויים מוצהרים. כל מיזוג שמות חייב להופיע כאן במפורש.
+# אין הכלה חלקית: "אלאדין" אינו "אלאדין ומנורת נס החנוכה".
+# ─────────────────────────────────────────────────────────────────────
+SHOW_ALIASES = build_alias_index({
+    "simba": ["סימבה", "סימבה מלך"],
+})
+
+# טבלת היעד ועמודת המפתח — ניתנות להגדרה בלי שינוי קוד.
+# ברירת המחדל נשארת כפי שהיה עד לאימות הגדרת הטבלאות ב-AppSheet.
+TARGET_TABLE = os.getenv("PAPI_APPSHEET_TARGET_TABLE", "כרטיסים")
+KEY_COLUMN = os.getenv("PAPI_APPSHEET_KEY_COLUMN", "ID")
+SOURCE_TABLE = os.getenv("PAPI_APPSHEET_SOURCE_TABLE", "הופעות עתידיות")
+DRY_RUN = os.getenv("PAPI_DRY_RUN", "").strip().lower() in ("1", "true", "yes")
+
+
+def _parse_appsheet_date(raw):
+    """AppSheet עשוי להחזיר כמה פורמטים. מחזיר date או None."""
+    text = str(raw or "").strip()
+    if not text:
+        return None
+    for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y"):
+        try:
+            return datetime.strptime(text, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
 def update_appsheet_with_bravo_data(scraped_data):
-    print("📥 Processing data for AppSheet API...")
-    
+    """
+    מתאים את הנתונים שנסרקו לשורות ב-AppSheet ומעדכן אותן.
+
+    ארבעת הכללים (ראה papi_sync_guard):
+      1. נתון חסר נפסל ואינו נכתב כאפס.
+      2. הצלחה נקבעת לפי גוף התגובה ומספר השורות שאושרו.
+      3. התאמה לפי שם מנורמל מדויק או כינוי מוצהר; ריבוי התאמות נפסל.
+      4. ירידה חריגה בנפח עוצרת את הכתיבה.
+
+    מחזיר RunReport. report.ok=False מחייב יציאה בקוד שגיאה.
+    """
+    report = RunReport("בראבו → AppSheet")
     app_id = os.getenv("APPSHEET_APP_ID")
     app_key = os.getenv("APPSHEET_APP_KEY")
-    
-    """Main logic: Matches scraped data against AppSheet records and updates them."""
-    table_name = "הופעות עתידיות"
-    records = get_appsheet_data(table_name)
-    
+
+    bravo_rows = [s for s in scraped_data if s.get("ארגון") == "בראבו"]
+    report.scraped = len(bravo_rows)
+    print(f"📥 נסרקו {report.scraped} מועדים של בראבו.")
+
+    # ── כלל 4: הגנת נפח, לפני כל קריאה או כתיבה ──
+    guard = VolumeGuard("bravo", min_ratio=0.7, min_rows=1)
+    allowed, volume_message = guard.check(report.scraped)
+    print(f"🛡️ {volume_message}")
+    if not allowed:
+        report.error(f"הכתיבה נעצרה בהגנת נפח: {volume_message}")
+        return report
+
+    records = get_appsheet_data(SOURCE_TABLE)
     if not records:
-        print("❌ No records found to update.")
-        return
+        report.error(f"לא התקבלו רשומות מטבלת {SOURCE_TABLE} — לא נכתב דבר.")
+        return report
+    print(f"📚 התקבלו {len(records)} רשומות מ-{SOURCE_TABLE}.")
 
     israel_tz = pytz.timezone("Asia/Jerusalem")
-    # Format: 2026-03-17 14:09:00
-    now_israel = datetime.now(israel_tz).strftime('%Y-%m-%d %H:%M:00')    
+    now_israel = datetime.now(israel_tz).strftime("%Y-%m-%d %H:%M:00")
 
     batch_updates = []
-    not_found = []
-    updated_rows_count = 0
 
-    # 2. Re-implement your exact matching logic
-    for seance in scraped_data:
-        if seance["ארגון"] != "בראבו":
-            continue
+    for seance in bravo_rows:
+        name = str(seance.get("הפקה", "")).strip()
+        date_text = str(seance.get("תאריך", "")).strip()
+        label = f"{name} / {date_text}"
 
         try:
-            scraped_date_obj = datetime.strptime(seance["תאריך"].strip(), "%d/%m/%Y").date()
-        except Exception as e:
-            print(f"❌ Error parsing scraped date {seance['תאריך']}: {e}")
+            scraped_date = datetime.strptime(date_text, "%d/%m/%Y").date()
+        except Exception:
+            report.skip(label, f"תאריך שאינו ניתן לפענוח: '{date_text}'")
             continue
 
-        found = False
-        seance_name = seance["הפקה"].strip()
-        
-        # Your specific Simba logic preserved
-        if "סימבה" in seance_name and "סוואנה" not in seance_name and "אפריקה" not in seance_name:
-            seance_name = "סימבה מלך"
+        # ── כלל 1: נתון חסר נפסל, לא הופך לאפס ──
+        sold = safe_int(seance.get("נמכרו"))
+        if sold is MISSING:
+            report.skip(label, f"ערך 'נמכרו' חסר או לא תקין: {seance.get('נמכרו')!r}")
+            continue
 
-        for row in records:
-            row_name = str(row.get("הפקה", "")).strip()
-            row_date_raw = str(row.get("תאריך", "")).strip()
-            row_org = str(row.get("ארגון", "")).strip()
+        # ── כלל 3: התאמה מדויקת, ריבוי התאמות נפסל ──
+        def matches(row, _name=name, _date=scraped_date, _org=seance.get("ארגון", "")):
+            if _parse_appsheet_date(row.get("תאריך")) != _date:
+                return False
+            row_org = str(row.get("ארגון") or "").strip()
+            if row_org and row_org not in str(_org).strip():
+                return False
+            return titles_match(_name, row.get("הפקה"), SHOW_ALIASES)
 
-            # 2. CONVERT APPSHEET DATE TO OBJECT
-            app_date_obj = None
-            for fmt in ("%Y-%m-%d", "%m/%d/%Y", "%d/%m/%Y"):
-                try:
-                    app_date_obj = datetime.strptime(row_date_raw, fmt).date()
-                    break # ✅ Added break: Stop once we find the right format
-                except ValueError:
-                    continue
+        match, status = find_single_match(records, matches)
 
-            if not app_date_obj:
-                continue
+        if status == "ambiguous":
+            report.ambiguity(label, "יותר משורה אחת ב-AppSheet תואמת שם, תאריך וארגון")
+            continue
+        if status == "none":
+            same_date = [
+                str(r.get("הפקה", "")).strip()
+                for r in records
+                if _parse_appsheet_date(r.get("תאריך")) == scraped_date
+            ]
+            hint = f"שורות באותו תאריך: {same_date[:5]}" if same_date else "אין שורות בתאריך הזה"
+            report.miss(label, hint)
+            continue
 
-            # Your exact matching conditions
-            title_match = (seance_name in row_name or row_name in seance_name)
-            
-            if (
-                title_match
-                and app_date_obj == scraped_date_obj
-                and row_org in seance["ארגון"].strip()
-            ):
-                # הכנת העדכון - חובה לכלול את ה-ID (או ה-Key של הטבלה שלך)
-                # אם ה-Key שלך הוא לא "ID", שנה את השורה למטה לשם העמודה הנכון (למשל "_RowNumber")
+        key_value = match.get(KEY_COLUMN)
+        if key_value in (None, ""):
+            report.skip(label, f"לשורה התואמת אין ערך בעמודת המפתח '{KEY_COLUMN}'")
+            continue
 
-                batch_updates.append({
-                    "ID": row["ID"], 
-                    "נמכרו": int(seance["נמכרו"]) if str(seance["נמכרו"]).isdigit() else 0,
-                    "עודכן לאחרונה": now_israel
-                })
-                
-                updated_rows_count += 1
-                found = True
-                print(f"✅ נמצאה התאמה: {seance_name} בתאריך {seance['תאריך']}")
-                break
-            # for debugging near-misses:
-            # elif app_date_obj == scraped_date_obj:
-            #     not_found.append((seance["הפקה"], row_name, app_date_obj))
-        
-        if not found:
-            not_found.append((seance["הפקה"], row_name, seance["תאריך"], row_date_raw))
+        batch_updates.append({
+            KEY_COLUMN: key_value,
+            "נמכרו": sold,
+            "עודכן לאחרונה": now_israel,
+        })
+        report.matched += 1
+        print(f"✅ התאמה: {label} → {KEY_COLUMN}={key_value}, נמכרו={sold}")
 
-    # 3. Send the batch update
-    if batch_updates:
-        print(f"📤 שולח {len(batch_updates)} שורות לעדכון ב-AppSheet...")
+    if not batch_updates:
+        print("ℹ️ אין שורות לעדכון.")
+        if report.scraped and not report.matched:
+            report.error("נסרקו מועדים אך אף אחד לא הותאם — ייתכן שינוי במבנה המקור.")
+        return report
 
-        url = f"https://api.appsheet.com/api/v1/apps/{app_id}/tables/כרטיסים/Action"
-        
-        body = {
-            "Action": "Edit",
-            "Properties": {
-            "Locale": "en-US",
-            "Timezone": "Israel Standard Time"
-            },
-            "Rows": batch_updates
-        }
+    if DRY_RUN:
+        print(f"🧪 DRY RUN — {len(batch_updates)} שורות היו נשלחות ל-{TARGET_TABLE}. לא נשלח דבר.")
+        report.confirmed = 0
+        return report
 
-        try:
-            response = requests.post(url, headers={"ApplicationAccessKey": app_key}, json=body)
-            print(f"🚀 AppSheet API Status: {response.status_code}")
-            if response.status_code == 200:
-                print(f"🎉 העדכון הסתיים בהצלחה! עודכנו {updated_rows_count} שורות.")
-            else:
-                print(f"❌ שגיאת API (סטטוס {response.status_code}): {response.text}")
-        except Exception as e:
-            print(f"❌ נכשל בשליחת הבקשה: {e}")
+    # ── כלל 2: הצלחה לפי גוף התגובה ──
+    url = f"https://api.appsheet.com/api/v1/apps/{app_id}/tables/{TARGET_TABLE}/Action"
+    body = {
+        "Action": "Edit",
+        "Properties": {"Locale": "en-US", "Timezone": "Israel Standard Time"},
+        "Rows": batch_updates,
+    }
 
-    if not_found:
-        print("\n⚠️ Near-misses or Mismatches found (Date matched, Name didn't):")
-        # Fixed the unpacking here (3 variables instead of 2)
-        for s_name, r_name, r_date, r_date_raw in not_found:
-            print(f"   • Scraped: '{s_name}' | AppSheet Row: '{r_name}' | Scraped Date: {r_date}, AppSheet Date: '{r_date_raw}'")
+    print(f"📤 שולח {len(batch_updates)} שורות ל-{TARGET_TABLE} (מפתח: {KEY_COLUMN})...")
+    try:
+        response = requests.post(
+            url, headers={"ApplicationAccessKey": app_key}, json=body, timeout=120
+        )
+    except Exception as exc:
+        report.error(f"בקשת הכתיבה נכשלה: {exc}")
+        return report
+
+    ok, confirmed, detail = verify_appsheet_response(response, len(batch_updates))
+    report.confirmed = confirmed
+
+    if ok:
+        print(f"🎉 אושרו {confirmed} שורות ב-{TARGET_TABLE}.")
+        guard.record_success(report.scraped)
+    else:
+        report.error(f"הכתיבה לא אושרה: {detail}")
+        print(f"❌ הכתיבה לא אושרה: {detail}")
+
+    return report
 
 # Main execution
 if __name__ == "__main__":
@@ -455,11 +504,17 @@ if __name__ == "__main__":
             rows = [row.values() for row in unique_data]
             print(tabulate(rows, headers=headers, tablefmt="grid", stralign="center"))
 
-            # ✅ Update Google Sheet
-            update_appsheet_with_bravo_data(unique_data)
+            # ✅ עדכון AppSheet
+            report = update_appsheet_with_bravo_data(unique_data)
+            print(report.summary())
+            if not report.ok:
+                print("❌ הריצה נכשלה. ראה את הדוח למעלה.")
+                sys.exit(1)
         else:
-            print("❌ לא נמצאו מופעים.")
-    
+            # סריקה ריקה אינה הוכחה שאין מופעים. נכשל בקול, ולא כותבים דבר.
+            print("❌ לא נמצאו מופעים — הסריקה חזרה ריקה. לא נכתב דבר.")
+            sys.exit(1)
+
     except Exception as e:
         print("❌ ERROR encountered:")
         traceback.print_exc()
